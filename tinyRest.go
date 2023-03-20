@@ -52,7 +52,7 @@ func (s *Resource) AllowMethods() string {
 			c = append(c, method)
 		}
 
-		if f, _ := s.methods[http.MethodOptions]; f != nil {
+		if f, _ := s.methods[http.MethodOptions]; f == nil {
 			c = append(c, http.MethodOptions)
 		}
 
