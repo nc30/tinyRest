@@ -5,42 +5,56 @@ import (
 	"strings"
 )
 
-var AccessControlDefault = "*"
+func New(s *ResourceSet) *Resource {
+	r := &Resource{
+		methods: map[string]http.HandlerFunc{},
+	}
 
-type ResourceSet struct {
-	Get    http.HandlerFunc
-	Post   http.HandlerFunc
-	Head   http.HandlerFunc
-	Put    http.HandlerFunc
-	Patch  http.HandlerFunc
-	Delete http.HandlerFunc
+	if s.Get != nil {
+		r.methods[http.MethodGet] = s.Get
+	}
+	if s.Head != nil {
+		r.methods[http.MethodHead] = s.Head
+	}
+	if s.Post != nil {
+		r.methods[http.MethodPost] = s.Post
+	}
+	if s.Put != nil {
+		r.methods[http.MethodPut] = s.Put
+	}
+	if s.Patch != nil {
+		r.methods[http.MethodPatch] = s.Patch
+	}
+	if s.Connect != nil {
+		r.methods[http.MethodConnect] = s.Connect
+	}
+	if s.Delete != nil {
+		r.methods[http.MethodDelete] = s.Delete
+	}
+	if s.Trace != nil {
+		r.methods[http.MethodTrace] = s.Trace
+	}
 
-	cors *string
+	r.AllowMethods()
+
+	return r
 }
 
-func (s *ResourceSet) AllowMethods() string {
+type Resource struct {
+	methods map[string]http.HandlerFunc
+	cors    *string
+}
+
+func (s *Resource) AllowMethods() string {
 	if s.cors == nil {
 		c := []string{}
-		if s.Get != nil {
-			c = append(c, http.MethodGet)
-		}
-		if s.Post != nil {
-			c = append(c, http.MethodPost)
-		}
-		if s.Head != nil {
-			c = append(c, http.MethodHead)
-		}
-		if s.Put != nil {
-			c = append(c, http.MethodPut)
-		}
-		if s.Patch != nil {
-			c = append(c, http.MethodPatch)
-		}
-		if s.Delete != nil {
-			c = append(c, http.MethodDelete)
+		for method, _ := range s.methods {
+			c = append(c, method)
 		}
 
-		c = append(c, http.MethodOptions)
+		if f, _ := s.methods[http.MethodOptions]; f != nil {
+			c = append(c, http.MethodOptions)
+		}
 
 		cors := strings.Join(c, ",")
 		s.cors = &cors
@@ -49,51 +63,32 @@ func (s *ResourceSet) AllowMethods() string {
 	return *s.cors
 }
 
-func (s *ResourceSet) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Access-Control-Allow-Origin", AccessControlDefault)
+func (s *Resource) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Access-Control-Allow-Methods", s.AllowMethods())
 
-	switch r.Method {
-	case http.MethodOptions:
+	if r.Method == http.MethodOptions {
 		w.Header().Add("Content-Type", "text/plain")
 		w.Header().Add("Content-Length", "0")
-		w.WriteHeader(http.StatusCreated)
+		w.WriteHeader(http.StatusNoContent)
 		return
-	case http.MethodGet:
-		if s.Get == nil {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-		}
-
-		s.Get(w, r)
-	case http.MethodPost:
-		if s.Post == nil {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-		}
-
-		s.Post(w, r)
-	case http.MethodHead:
-		if s.Head == nil {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-		}
-
-		s.Head(w, r)
-	case http.MethodPut:
-		if s.Put == nil {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-		}
-
-		s.Put(w, r)
-	case http.MethodPatch:
-		if s.Patch == nil {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-		}
-
-		s.Patch(w, r)
-	case http.MethodDelete:
-		if s.Delete == nil {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-		}
-
-		s.Delete(w, r)
 	}
+
+	f, _ := s.methods[r.Method]
+	if f == nil {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	f(w, r)
+}
+
+type ResourceSet struct {
+	Get     http.HandlerFunc
+	Head    http.HandlerFunc
+	Post    http.HandlerFunc
+	Put     http.HandlerFunc
+	Patch   http.HandlerFunc
+	Connect http.HandlerFunc
+	Delete  http.HandlerFunc
+	Trace   http.HandlerFunc
 }
